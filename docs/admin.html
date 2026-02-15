@@ -1,0 +1,396 @@
+<!DOCTYPE html>    
+<html lang="es">    
+<head>    
+    <meta charset="UTF-8">    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    
+    <title>Panel de Administración - TCG Dual</title>    
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tcgdex/sdk@2/dist/tcgdex.browser.js"></script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
+</head>    
+<body>    
+    <!-- Floating User Panel -->
+    <div class="top-right-panel" id="top-panel" style="display: none;">
+        <div class="theme-switcher-small">
+            <button class="theme-btn-small" data-theme="theme-light" title="Modo Claro"><i class="fas fa-sun"></i></button>
+            <button class="theme-btn-small" data-theme="theme-medium" title="Modo Medio"><i class="fas fa-palette"></i></button>
+            <button class="theme-btn-small" data-theme="theme-dark" title="Modo Oscuro"><i class="fas fa-moon"></i></button>
+        </div>
+        <div class="user-menu-container">
+            <button class="user-avatar-btn" id="avatar-btn">
+                <i class="fas fa-user"></i>
+            </button>
+            <div class="user-dropdown-menu" id="user-dropdown">
+                <div class="user-dropdown-info">
+                    <div class="user-dropdown-name" id="dropdown-user-name">Usuario</div>
+                    <div class="user-dropdown-role" id="dropdown-user-role">Admin</div>
+                </div>
+                <a href="#" class="menu-item" id="menu-btn-home"><i class="fas fa-home"></i> Mi Panel</a>
+                <a href="#" class="menu-item" id="menu-btn-albums"><i class="fas fa-book"></i> Mis Álbumes</a>
+                <a href="#" class="menu-item" id="menu-btn-decks"><i class="fas fa-layer-group"></i> Mis Decks</a>
+                <a href="scanner.html" class="menu-item"><i class="fas fa-barcode"></i> Scanner de Cartas</a>
+                <a href="#" class="menu-item" id="menu-btn-spirits"><i class="fas fa-ghost"></i> Compañeros 3D</a>
+                <a href="#" class="menu-item logout" id="menu-btn-logout"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="overlay active">
+        <div class="overlay-content login-container">
+            <h1>Iniciar Sesión</h1>
+            <div class="form-group">
+                <label>Usuario</label>
+                <input type="text" id="login-username" placeholder="Tu nombre de usuario">
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="login-password" placeholder="********">
+            </div>
+            <button id="btn-login" class="btn" style="width: 100%; margin-bottom: 15px;">Entrar</button>
+        </div>
+    </div>
+
+    <!-- Authenticated Content -->
+    <div id="authenticated-content" style="display: none; width: 100%; max-width: 1200px; margin: 0 auto;">
+
+        <!-- Main Admin Navigation (Dashboard) -->
+        <div id="view-main-dashboard" class="admin-section active">
+            <div class="admin-header">
+                <h1 id="welcome-message">Panel de Control</h1>
+                <div id="store-link-container"></div>
+            </div>
+
+            <div class="tile-grid">
+                <a href="#" class="tile tile-blue" id="btn-home">
+                    <i class="fas fa-home"></i>
+                    <span>Home</span>
+                </a>
+                <a href="#" class="tile tile-purple" id="btn-show-albums">
+                    <i class="fas fa-book"></i>
+                    <span>Mis Álbumes</span>
+                </a>
+                <a href="#" class="tile tile-green" id="btn-show-decks">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Mis Decks</span>
+                </a>
+                <a href="#" class="tile tile-yellow" id="btn-show-spirits">
+                    <i class="fas fa-ghost"></i>
+                    <span>Compañero 3D</span>
+                </a>
+                <a href="scanner.html" class="tile tile-orange" id="btn-scanner">
+                    <i class="fas fa-barcode"></i>
+                    <span>Scanner</span>
+                </a>
+                <a href="users.html" class="tile tile-pink" id="btn-users-panel" style="display:none;">
+                    <i class="fas fa-users"></i>
+                    <span>Usuarios</span>
+                </a>
+                <a href="#" class="tile tile-pink" id="btn-logout-tile">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Salir</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Dashboard View (Albums) -->
+        <div id="view-dashboard" class="admin-section" style="display:none;">
+            <div class="admin-header">
+                <button id="btn-back-to-main" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-arrow-left"></i> Volver al Panel</button>
+                <h1>Mis Álbumes</h1>
+                <button id="btn-create-album" class="btn"><i class="fas fa-plus"></i> Crear Nuevo Álbum</button>
+            </div>
+            <div id="album-list" class="album-list">
+                <!-- Albums will be loaded here -->
+                <div class="loading">Cargando álbumes...</div>
+            </div>
+        </div>
+
+        <!-- Decks View -->
+        <div id="view-decks" class="admin-section" style="display:none;">
+            <div class="admin-header">
+                <button class="btn btn-secondary btn-back-main" style="margin-bottom: 20px;"><i class="fas fa-arrow-left"></i> Volver al Panel</button>
+                <h1>Mis Decks</h1>
+                <button id="btn-create-deck" class="btn"><i class="fas fa-plus"></i> Crear Nuevo Deck</button>
+            </div>
+            <div id="deck-list" class="album-list">
+                <!-- Decks will be loaded here -->
+                <div class="loading">Cargando decks...</div>
+            </div>
+        </div>
+
+        <!-- Deck Editor View -->
+        <div id="view-deck-editor" class="admin-section" style="display:none;">
+            <div class="admin-header">
+                <h1 id="deck-editor-title">Editar Deck</h1>
+                <button id="btn-save-deck-meta" class="btn"><i class="fas fa-save"></i> Guardar Nombre</button>
+            </div>
+
+            <div class="album-card" style="max-width: 600px; margin: 0 auto 40px;">
+                <div class="form-group">
+                    <label>Nombre del Deck</label>
+                    <input type="text" id="input-deck-name" placeholder="Nuevo Deck">
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <label class="switch">
+                        <input type="checkbox" id="input-deck-public" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <label style="margin-bottom: 0; cursor: pointer;" for="input-deck-public">Deck Público (Visible en el link)</label>
+                </div>
+            </div>
+
+            <div class="admin-header">
+                <h2><i class="fas fa-images"></i> Imágenes del Deck</h2>
+            </div>
+
+            <!-- External Card Search for Decks -->
+            <div class="form-group" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 25px; max-width: 600px; margin-left: auto; margin-right: auto;">
+                <label><i class="fas fa-search"></i> Buscar y Añadir al Deck</label>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <input type="text" id="deck-external-search-input" placeholder="Nombre o código de la carta..." style="flex: 1;">
+                    <button id="btn-deck-external-search" class="btn"><i class="fas fa-search"></i></button>
+                </div>
+                <div id="deck-external-search-results" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; margin-top: 15px; max-height: 160px; overflow-y: auto; padding: 5px; border-top: 1px solid #333;">
+                    <!-- Results will appear here -->
+                </div>
+            </div>
+
+            <div class="admin-header" style="justify-content: flex-end; margin-bottom: 20px;">
+                <button id="btn-add-deck-card" class="btn"><i class="fas fa-plus-circle"></i> Añadir Imagen</button>
+            </div>
+            <div id="deck-card-list" class="album-list">
+                <!-- Deck cards will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Compañeros View -->
+        <div id="view-spirits" class="admin-section" style="display:none;">
+            <div class="admin-header">
+                <button class="btn btn-secondary btn-back-main" style="margin-bottom: 20px;"><i class="fas fa-arrow-left"></i> Volver al Panel</button>
+                <h1>Mis Compañeros</h1>
+                <p>Elige tu compañero 3D para la pantalla de carga.</p>
+                <div id="admin-upload-container" style="display:none; margin-top: 20px;">
+                    <button id="btn-open-upload-spirit" class="btn"><i class="fas fa-upload"></i> Subir Nuevo Compañero</button>
+                </div>
+            </div>
+
+            <div id="spirits-grid" class="spirits-grid">
+                <!-- Compañeros will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Album Editor View -->
+        <div id="view-editor" class="admin-section" style="display:none;">
+            <div class="admin-header">
+                <button id="btn-back-to-albums" class="btn btn-secondary" style="margin-bottom: 20px;"><i class="fas fa-arrow-left"></i> Volver a Álbumes</button>
+                <h1 id="editor-title">Editar Álbum</h1>
+                <button id="btn-save-album-meta" class="btn"><i class="fas fa-save"></i> Guardar Cambios</button>
+            </div>
+
+            <div class="album-card" style="max-width: 600px; margin: 0 auto 40px;">
+                <div class="form-group">
+                    <label>Título del Álbum</label>
+                    <input type="text" id="input-album-title" placeholder="Nuevo Álbum">
+                </div>
+                <div class="form-group">
+                    <label>Portada (Imagen o Color con Textura)</label>
+                    <div class="color-input-wrapper">
+                        <input type="text" id="input-album-cover" placeholder="URL de la imagen (Opcional)" style="flex:1;">
+                        <input type="color" id="input-album-cover-color" value="#1a1a1a" title="Color de Portada" class="color-picker-custom">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Contraportada (Imagen o Color con Textura)</label>
+                    <div class="color-input-wrapper">
+                        <input type="text" id="input-album-back" placeholder="URL de la imagen (Opcional)" style="flex:1;">
+                        <input type="color" id="input-album-back-color" value="#1a1a1a" title="Color de Contraportada" class="color-picker-custom">
+                    </div>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <label class="switch">
+                        <input type="checkbox" id="input-album-public" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <label style="margin-bottom: 0; cursor: pointer;" for="input-album-public">Álbum Público (Visible en el link)</label>
+                </div>
+            </div>
+
+            <div class="admin-header">
+                <h2><i class="fas fa-file-alt"></i> Páginas</h2>
+                <button id="btn-add-page" class="btn"><i class="fas fa-plus-circle"></i> Añadir Página</button>
+            </div>
+            <div id="page-list" class="page-list-container">
+                <!-- Pages will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Slot Modal -->
+    <div id="slot-modal" class="overlay">
+        <div class="overlay-content">
+            <span id="close-slot-modal" class="close-btn">&times;</span>
+            <h2>Editar Espacio</h2>
+
+            <!-- External Card Search -->
+            <div class="form-group" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 25px;">
+                <label><i class="fas fa-search"></i> Buscar en Base de Datos Externa</label>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <input type="text" id="external-search-input" placeholder="Nombre o código de la carta..." style="flex: 1;">
+                    <button id="btn-external-search" class="btn"><i class="fas fa-search"></i></button>
+                </div>
+                <div id="external-search-results" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; margin-top: 15px; max-height: 160px; overflow-y: auto; padding: 5px; border-top: 1px solid #333;">
+                    <!-- Results will appear here -->
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>URL de la Imagen</label>
+                <input type="text" id="slot-image-url">
+            </div>
+            <div class="info-grid">
+                <div class="form-group">
+                    <label>Nombre de la Carta</label>
+                    <input type="text" id="slot-name">
+                </div>
+                <div class="form-group">
+                    <label>Efecto Holo (Popup)</label>
+                    <select id="slot-holo-effect" style="width: 100%; background: #252525; color: white; border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 8px;">
+                        <option value="" style="background: #252525;">Ninguno</option>
+                        <option value="super-rare" style="background: #252525;">Super Rare</option>
+                        <option value="secret-rare" style="background: #252525;">Secret Rare</option>
+                        <option value="foil" style="background: #252525;">Foil</option>
+                        <option value="rainbow" style="background: #252525;">Rainbow</option>
+                        <option value="ghost-rare" style="background: #252525;">Ghost Rare</option>
+                        <option value="custom-texture" style="background: #252525;">CustomTexture</option>
+                    </select>
+                </div>
+                <div class="form-group" id="custom-mask-container" style="display: none;">
+                    <label>URL de la Máscara (CustomTexture)</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="slot-custom-mask" placeholder="https://..." style="flex: 1;">
+                        <button id="btn-open-mask-editor" class="btn btn-secondary" style="white-space: nowrap;">
+                            <i class="fas fa-paint-brush"></i> Editar
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="info-grid">
+                <div class="form-group">
+                    <label>Rareza</label>
+                    <input type="text" id="slot-rarity">
+                </div>
+                <div class="form-group">
+                    <label>Expansión</label>
+                    <input type="text" id="slot-expansion">
+                </div>
+                <div class="form-group">
+                    <label>Estado</label>
+                    <input type="text" id="slot-condition">
+                </div>
+                <div class="form-group">
+                    <label>Cantidad</label>
+                    <input type="text" id="slot-quantity">
+                </div>
+                <div class="form-group price-item">
+                    <label>Precio</label>
+                    <input type="text" id="slot-price">
+                </div>
+            </div>
+            <button id="btn-save-slot" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-check-circle"></i> Guardar Carta</button>
+        </div>
+    </div>
+
+    <!-- Spirit Upload Modal (Admin only) -->
+    <div id="spirit-upload-modal" class="overlay">
+        <div class="overlay-content">
+            <span id="close-spirit-upload-modal" class="close-btn">&times;</span>
+            <h2 id="spirit-modal-title">Subir Nuevo Compañero</h2>
+            <input type="hidden" id="edit-spirit-id">
+            <div class="form-group">
+                <label>Nombre del Compañero</label>
+                <input type="text" id="input-spirit-name" placeholder="Ej: Pikachu">
+            </div>
+            <div class="form-group">
+                <label>Archivos del Modelo (GLTF, GLB, BIN, Texturas)</label>
+                <div class="drop-zone file-drop-zone" id="drop-zone-spirit">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Arrastra todos los archivos del modelo (.gltf, .glb, .bin, texturas) aquí o haz clic para seleccionar</p>
+                    <input type="file" id="input-spirit-files" multiple accept=".gltf,.glb,.bin,.png,.jpg,.jpeg,.webp" style="display: none;">
+                    <div class="file-name"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Tipo de Animación del Modelo</label>
+                <select id="input-spirit-animation">
+                    <option value="orbit">Giro en Eje Z (Órbita)</option>
+                    <option value="float">Movimiento Sutil (Flotante)</option>
+                    <option value="float-static">Flotante (Sin Rotación)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Asset de Partículas (Ej: cerezo.png)</label>
+                <input type="text" id="input-spirit-particle-asset" placeholder="cerezo.png">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Movimiento de Partículas</label>
+                <select id="input-spirit-particle-movement">
+                    <option value="falling">Cayendo (Gravedad)</option>
+                    <option value="trail">Estela (Sigue al personaje)</option>
+                    <option value="none">Sin Partículas</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tamaño del Modelo (Escala)</label>
+                <input type="number" id="input-spirit-scale" step="0.1" value="1.8" placeholder="Ej: 1.8">
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                <label class="switch">
+                    <input type="checkbox" id="input-spirit-public" checked>
+                    <span class="slider"></span>
+                </label>
+                <label style="margin-bottom: 0; cursor: pointer;" for="input-spirit-public">Compañero Público (Visible en el link)</label>
+            </div>
+            <button id="btn-save-spirit" class="btn" style="width: 100%; margin-top: 20px;"><i class="fas fa-cloud-upload-alt"></i> Subir a la Nube</button>
+        </div>
+    </div>
+
+    <!-- Mask Editor Modal -->
+    <div id="mask-editor-overlay" class="overlay">
+        <div class="overlay-content" style="max-width: 600px;">
+            <span id="close-mask-editor" class="close-btn">&times;</span>
+            <h2>Editor de Máscara</h2>
+            <p style="font-size: 12px; color: #aaa; margin-bottom: 15px;">Dibuja en blanco donde quieras aplicar el efecto foil.</p>
+
+            <div id="mask-canvas-wrapper" style="position: relative; margin-bottom: 20px; border: 2px solid #333; border-radius: 12px; overflow: hidden; width: 168px; height: 244px;">
+                <!-- Card background will be set via CSS -->
+                <canvas id="mask-canvas" width="168" height="244" style="cursor: crosshair; display: block;"></canvas>
+            </div>
+
+            <div class="editor-controls" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <label style="font-size: 12px; text-transform: uppercase; color: #666; font-weight: 700;">Tamaño:</label>
+                    <input type="range" id="brush-size" min="1" max="50" value="10" style="flex: 1;">
+                    <span id="brush-size-val" style="font-size: 14px; width: 30px;">10</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                    <button id="tool-brush" class="btn btn-secondary active"><i class="fas fa-paint-brush"></i> Pincel</button>
+                    <button id="tool-eraser" class="btn btn-secondary"><i class="fas fa-eraser"></i> Borrador</button>
+                    <button id="btn-undo-mask" class="btn btn-secondary"><i class="fas fa-undo"></i> Deshacer</button>
+                    <button id="btn-clear-mask" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Limpiar Todo</button>
+                </div>
+
+                <button id="btn-save-mask" class="btn" style="width: 100%;"><i class="fas fa-save"></i> Guardar Máscara</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/admin.js"></script>
+</body>    
+</html>

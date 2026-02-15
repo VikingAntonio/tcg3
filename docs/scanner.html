@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Profesional - TCG Dual</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent-color: #00d2ff;
+        }
+
+        body.public-body {
+            background: radial-gradient(circle at top, #1a1a2e 0%, #0f0f1a 100%) !important;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            padding: 20px;
+        }
+
+        .scanner-layout {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .scanner-header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .scanner-header h1 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .destination-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            align-items: end;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #aaa;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .custom-select-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+
+        select, input {
+            background: rgba(0,0,0,0.3) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            color: white !important;
+            padding: 12px !important;
+            border-radius: 12px !important;
+            font-size: 14px !important;
+            outline: none !important;
+            width: 100%;
+        }
+
+        .btn-plus {
+            background: var(--accent-color) !important;
+            border: none !important;
+            color: #000 !important;
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-plus:hover { transform: scale(1.05); }
+
+        .viewport-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1/1;
+            background: #000;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 2px solid var(--glass-border);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        }
+
+        #video-preview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #file-preview {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+
+        .scan-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .scan-frame {
+            width: 75%;
+            height: 85%;
+            border: 2px solid var(--accent-color);
+            border-radius: 20px;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.7);
+            position: relative;
+        }
+
+        .corner-tl { position: absolute; top: -5px; left: -5px; width: 20px; height: 20px; border-top: 4px solid var(--accent-color); border-left: 4px solid var(--accent-color); border-radius: 8px 0 0 0; }
+        .corner-tr { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; border-top: 4px solid var(--accent-color); border-right: 4px solid var(--accent-color); border-radius: 0 8px 0 0; }
+        .corner-bl { position: absolute; bottom: -5px; left: -5px; width: 20px; height: 20px; border-bottom: 4px solid var(--accent-color); border-left: 4px solid var(--accent-color); border-radius: 0 0 0 8px; }
+        .corner-br { position: absolute; bottom: -5px; right: -5px; width: 20px; height: 20px; border-bottom: 4px solid var(--accent-color); border-right: 4px solid var(--accent-color); border-radius: 0 0 8px 0; }
+
+        .scanning-line {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: var(--accent-color);
+            box-shadow: 0 0 15px var(--accent-color);
+            animation: scan-anim 2s infinite ease-in-out;
+            opacity: 0;
+        }
+
+        @keyframes scan-anim {
+            0% { top: 5%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 95%; opacity: 0; }
+        }
+
+        .scanner-active .scanning-line { opacity: 1; }
+
+        .status-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ff4757;
+            display: inline-block;
+            margin-right: 10px;
+            transition: 0.3s;
+        }
+        .status-ready .status-dot { background: #2ed573; box-shadow: 0 0 10px #2ed573; }
+        .status-working .status-dot {
+            background: #ffa500;
+            box-shadow: 0 0 10px #ffa500;
+            animation: pulse-orange 1s infinite;
+        }
+
+        @keyframes pulse-orange {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+
+        .btn-main {
+            flex: 1;
+            min-width: 140px;
+            padding: 14px;
+            border-radius: 14px;
+            border: none;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary { background: var(--accent-color); color: #000; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 210, 255, 0.4); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .btn-secondary { background: rgba(255,255,255,0.1); color: white; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+
+        .back-btn {
+            position: fixed;
+            top: 25px; left: 25px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            width: 45px; height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            z-index: 100;
+        }
+        .back-btn:hover { background: rgba(255,255,255,0.2); }
+
+        .result-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            transform: translateX(120%);
+            background: #2f3136;
+            border-left: 4px solid #5865f2;
+            padding: 12px 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.24);
+            z-index: 2000;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+            width: 300px;
+        }
+
+        .result-toast.active { transform: translateX(0); }
+        .result-toast.error { border-left-color: #f04747; }
+        .result-toast.success { border-left-color: #43b581; }
+
+        .toast-img-box {
+            width: 40px; height: 56px;
+            background: #202225;
+            border-radius: 4px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 600px) {
+            .scanner-layout { padding-top: 50px; }
+            .back-btn { top: 15px; left: 15px; width: 35px; height: 35px; }
+            .destination-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="public-body">
+    <button class="back-btn" onclick="location.href='admin.html'"><i class="fas fa-arrow-left"></i></button>
+
+    <div class="scanner-layout">
+        <div class="scanner-header">
+            <h1>Scanner de Cartas</h1>
+            <p style="color: #aaa;">Encuentra y añade cartas automáticamente</p>
+        </div>
+
+        <div class="glass-panel">
+            <div class="destination-grid">
+                <div class="form-group">
+                    <label>Añadir a</label>
+                    <select id="select-target-type">
+                        <option value="album">Álbum</option>
+                        <option value="deck">Deck</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label id="dest-label">Seleccionar Álbum</label>
+                    <div class="custom-select-wrapper">
+                        <select id="select-dest"></select>
+                        <button class="btn-plus" id="btn-new-dest" title="Crear Nuevo"><i class="fas fa-plus"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="viewport-container" id="scanner-viewport">
+            <video id="video-preview" autoplay playsinline muted></video>
+            <img id="file-preview" src="">
+            <div class="scan-overlay">
+                <div class="scan-frame">
+                    <div class="corner-tl"></div>
+                    <div class="corner-tr"></div>
+                    <div class="corner-bl"></div>
+                    <div class="corner-br"></div>
+                    <div class="scanning-line"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel status-panel" id="status-container">
+            <div style="display: flex; align-items: center;">
+                <span class="status-dot"></span>
+                <span id="status-text">Motor Listo</span>
+            </div>
+            <div id="detected-code" style="color: var(--accent-color); font-family: monospace; font-size: 1rem; font-weight: bold;"></div>
+        </div>
+
+        <div class="controls-row">
+            <button id="btn-toggle-scan" class="btn-main btn-primary">
+                <i class="fas fa-camera"></i> Cámara
+            </button>
+            <button id="btn-upload" class="btn-main btn-secondary">
+                <i class="fas fa-upload"></i> Subir Imagen
+            </button>
+            <button id="btn-manual" class="btn-main btn-secondary">
+                <i class="fas fa-keyboard"></i> Manual
+            </button>
+        </div>
+    </div>
+
+    <input type="file" id="file-upload" accept="image/*" style="display: none;">
+
+    <div class="result-toast" id="result-toast">
+        <div class="toast-img-box">
+            <img id="toast-img" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+            <div id="toast-icon-err" style="display: none; height: 100%; width: 100%; align-items: center; justify-content: center; color: #f04747; font-size: 24px;">
+                <i class="fas fa-times-circle"></i>
+            </div>
+        </div>
+        <div style="flex: 1;">
+            <div id="toast-title" style="font-weight: 800; font-size: 11px; color: #b9bbbe; text-transform: uppercase; letter-spacing: 0.5px;">Notificación</div>
+            <div id="toast-name" style="color: #fff; font-size: 14px; font-weight: 500; margin-top: 2px; line-height: 1.2;">Cargando...</div>
+        </div>
+    </div>
+
+    <canvas id="hidden-canvas" style="display:none;"></canvas>
+
+    <script src="js/scanner.js"></script>
+</body>
+</html>
